@@ -1,0 +1,23 @@
+<li class="task-row {% if task.status == 'done' %}task--done{% endif %}">
+  <form
+    class="task-row__toggle"
+    method="POST"
+    action="{{ url_for('todo.toggle_task', task_id=task.id) }}"
+  >
+    {% if task.status == 'done' %}
+      <button type="submit" aria-label="Mark '{{ task.title }}' as not done">↺</button>
+    {% else %}
+      <button type="submit" aria-label="Mark '{{ task.title }}' as done">✓</button>
+    {% endif %}
+  </form>
+
+  <span class="task-row__title">{{ task.title }}</span>
+
+  <form
+    class="task-row__delete"
+    method="POST"
+    action="{{ url_for('todo.delete_task', task_id=task.id) }}"
+  >
+    <button type="submit" aria-label="Delete '{{ task.title }}'">✕</button>
+  </form>
+</li>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}TODO list{% endblock %}
+
+{% block main %}
+  <h1>Your tasks</h1>
+
+  <form
+    class="add-task-form"
+    method="POST"
+    action="{{ url_for('todo.add_task') }}"
+    novalidate
+  >
+    <label for="new-task-title" class="visually-hidden">New task</label>
+    <input
+      type="text"
+      id="new-task-title"
+      name="title"
+      placeholder="What needs doing?"
+      maxlength="200"
+      required
+      autofocus
+      value="{{ draft }}"
+      {% if error %}aria-invalid="true" aria-describedby="add-task-error"{% endif %}
+    />
+    <button type="submit">Add</button>
+    {% if error %}
+      <p id="add-task-error" class="form-error" role="alert">{{ error }}</p>
+    {% endif %}
+  </form>
+
+  {% if tasks %}
+    {% set pending = tasks | rejectattr('status', 'equalto', 'done') | list %}
+    {% set done = tasks | selectattr('status', 'equalto', 'done') | list %}
+
+    {% if pending %}
+      <h2 class="task-group-heading">To do</h2>
+      <ul class="task-list" aria-label="Pending tasks">
+        {% for task in pending %}
+          {% include "todo/_task_row.html" %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if done %}
+      <h2 class="task-group-heading">Done</h2>
+      <ul class="task-list task-list--done" aria-label="Completed tasks">
+        {% for task in done %}
+          {% include "todo/_task_row.html" %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% else %}
+    {% include "todo/_empty_state.html" %}
+  {% endif %}
+{% endblock %}

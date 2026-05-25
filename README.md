@@ -8,8 +8,11 @@ A small FastAPI service that exposes a paginated `/reports` endpoint backed by a
 app/
 ├── __init__.py
 ├── data.py        # Seed dataset (120 rows, deterministic)
+├── export.py      # RFC 4180 CSV serialization
 ├── models.py      # Pydantic models — internal vs public
 ├── reports.py     # Filter / sort / pagination query layer
+├── static/
+│   └── reports.html
 └── main.py        # FastAPI HTTP layer
 ```
 
@@ -41,16 +44,21 @@ Then hit it from another terminal:
 ```bash
 curl "http://localhost:8000/health"
 curl "http://localhost:8000/reports?limit=3" | python -m json.tool
+curl "http://localhost:8000/reports/export.csv?limit=3" -o reports.csv
 ```
+
+Open the reports UI at [http://localhost:8000/reports/page](http://localhost:8000/reports/page).
 
 ## Endpoints
 
-| Method | Path       | Description                                            |
-| ------ | ---------- | ------------------------------------------------------ |
-| GET    | `/health`  | Liveness probe — returns `{"status": "ok"}`.           |
-| GET    | `/reports` | Paginated list of reports with filtering and sorting.  |
+| Method | Path                    | Description                                            |
+| ------ | ----------------------- | ------------------------------------------------------ |
+| GET    | `/health`               | Liveness probe — returns `{"status": "ok"}`.           |
+| GET    | `/reports`              | Paginated list of reports with filtering and sorting.  |
+| GET    | `/reports/export.csv`   | CSV export of the current page (same query params as `/reports`). |
+| GET    | `/reports/page`         | Reports UI (filters, pagination, Export CSV button).   |
 
-### `GET /reports` query parameters
+### `GET /reports` and `GET /reports/export.csv` query parameters
 
 | Param        | Type            | Default      | Notes                                            |
 | ------------ | --------------- | ------------ | ------------------------------------------------ |

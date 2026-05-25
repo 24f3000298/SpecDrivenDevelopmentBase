@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reports</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: #1a1a1a;
+      background: #f6f7f9;
+    }
+    body { margin: 0; padding: 1.5rem 2rem 3rem; max-width: 1100px; }
+    h1 { margin: 0 0 1rem; font-size: 1.5rem; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #e2e4e8;
+      border-radius: 8px;
+    }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: #555; }
+    input, select, button {
+      font: inherit;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid #c8ccd4;
+      border-radius: 4px;
+    }
+    button {
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+    button:hover { background: #1d4ed8; }
+    button.secondary {
+      background: #fff;
+      color: #1a1a1a;
+      border-color: #c8ccd4;
+    }
+    button.secondary:hover { background: #f0f1f3; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #e2e4e8;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid #eef0f3;
+      font-size: 0.9rem;
+    }
+    th { background: #f8f9fb; font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .meta { margin: 0.75rem 0; font-size: 0.85rem; color: #666; }
+    .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+    .error { color: #b91c1c; margin-top: 0.5rem; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <h1>Reports</h1>
+
+  <form class="toolbar" id="filters">
+    <label>
+      Status
+      <select name="status" id="status">
+        <option value="">All</option>
+        <option value="pending">pending</option>
+        <option value="approved">approved</option>
+        <option value="rejected">rejected</option>
+        <option value="archived">archived</option>
+      </select>
+    </label>
+    <label>
+      From
+      <input type="datetime-local" name="date_from" id="date_from" />
+    </label>
+    <label>
+      To
+      <input type="datetime-local" name="date_to" id="date_to" />
+    </label>
+    <label>
+      Sort
+      <select name="sort" id="sort">
+        <option value="created_at">created_at</option>
+        <option value="id">id</option>
+        <option value="title">title</option>
+        <option value="status">status</option>
+        <option value="owner">owner</option>
+        <option value="amount">amount</option>
+      </select>
+    </label>
+    <label>
+      Order
+      <select name="descending" id="descending">
+        <option value="true">Newest first</option>
+        <option value="false">Oldest first</option>
+      </select>
+    </label>
+    <label>
+      Page size
+      <select name="limit" id="limit">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </label>
+    <button type="submit">Apply</button>
+    <button type="button" class="secondary" id="exportCsv">Export CSV</button>
+  </form>
+
+  <p class="meta" id="summary">Loading…</p>
+  <p class="error" id="error" hidden></p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Owner</th>
+        <th class="amount">Amount</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="pager">
+    <button type="button" class="secondary" id="prev" disabled>Previous</button>
+    <button type="button" class="secondary" id="next" disabled>Next</button>
+  </div>
+
+  <script>
+    const COLUMNS = [
+      { key: "id", label: "ID" },
+      { key: "title", label: "Title" },
+      { key: "status", label: "Status" },
+      { key: "owner", label: "Owner" },
+      { key: "amount", label: "Amount" },
+      { key: "created_at", label: "Created" },
+    ];
+
+    let offset = 0;
+    let currentItems = [];
+
+    const rowsEl = document.getElementById("rows");
+    const summaryEl = document.getElementById("summary");
+    const errorEl = document.getElementById("error");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+
+    function toIsoLocal(value) {
+      if (!value) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    }
+
+    function queryParams() {
+      const status = document.getElementById("status").value;
+      const dateFrom = toIsoLocal(document.getElementById("date_from").value);
+      const dateTo = toIsoLocal(document.getElementById("date_to").value);
+      const sort = document.getElementById("sort").value;
+      const descending = document.getElementById("descending").value;
+      const limit = document.getElementById("limit").value;
+
+      const params = new URLSearchParams({
+        sort,
+        descending,
+        offset: String(offset),
+        limit,
+      });
+      if (status) params.set("status", status);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      return params;
+    }
+
+    function escapeCsv(value) {
+      const s = String(value ?? "");
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    function downloadCsv(items) {
+      const header = COLUMNS.map((c) => escapeCsv(c.label)).join(",");
+      const body = items.map((row) =>
+        COLUMNS.map((c) => escapeCsv(row[c.key])).join(",")
+      );
+      const csv = [header, ...body].join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderTable(items) {
+      rowsEl.innerHTML = items
+        .map(
+          (r) => `<tr>
+            <td>${r.id}</td>
+            <td>${r.title}</td>
+            <td>${r.status}</td>
+            <td>${r.owner}</td>
+            <td class="amount">${r.amount.toFixed(2)}</td>
+            <td>${new Date(r.created_at).toLocaleString()}</td>
+          </tr>`
+        )
+        .join("");
+    }
+
+    async function loadReports() {
+      errorEl.hidden = true;
+      summaryEl.textContent = "Loading…";
+      const res = await fetch(`/reports?${queryParams()}`);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        errorEl.textContent = detail.detail || res.statusText;
+        errorEl.hidden = false;
+        summaryEl.textContent = "";
+        return;
+      }
+      const data = await res.json();
+      currentItems = data.items;
+      renderTable(currentItems);
+
+      const start = data.total === 0 ? 0 : data.offset + 1;
+      const end = Math.min(data.offset + data.items.length, data.total);
+      summaryEl.textContent =
+        data.total === 0
+          ? "No reports match your filters."
+          : `Showing ${start}–${end} of ${data.total}`;
+
+      prevBtn.disabled = data.offset <= 0;
+      nextBtn.disabled = data.offset + data.items.length >= data.total;
+    }
+
+    document.getElementById("filters").addEventListener("submit", (e) => {
+      e.preventDefault();
+      offset = 0;
+      loadReports();
+    });
+
+    prevBtn.addEventListener("click", () => {
+      const limit = Number(document.getElementById("limit").value);
+      offset = Math.max(0, offset - limit);
+      loadReports();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      const limit = Number(document.getElementById("limit").value);
+      offset += limit;
+      loadReports();
+    });
+
+    document.getElementById("exportCsv").addEventListener("click", () => {
+      if (!currentItems.length) {
+        errorEl.textContent = "Nothing to export on this page.";
+        errorEl.hidden = false;
+        return;
+      }
+      errorEl.hidden = true;
+      downloadCsv(currentItems);
+    });
+
+    loadReports();
+  </script>
+</body>
+</html>

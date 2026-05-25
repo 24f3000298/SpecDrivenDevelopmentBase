@@ -3,18 +3,31 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.models import ReportListResponse, ReportPublic, ReportStatus
 from app.reports import query
 
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 app = FastAPI(title="SDD Workshop — Reports API", version="0.1.0")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/reports/page", include_in_schema=False)
+def reports_page() -> FileResponse:
+    """Reports UI with filters, pagination, and CSV export."""
+
+    return FileResponse(_STATIC_DIR / "reports.html")
 
 
 @app.get("/reports", response_model=ReportListResponse)
